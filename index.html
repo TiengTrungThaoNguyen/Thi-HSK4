@@ -212,7 +212,7 @@
 
 <script>
 // ================== CAU HINH ==================
-var API_URL = 'https://script.google.com/macros/s/AKfycbySNdKrO4qxbxULLjF1y-M1rjmTsikEgWBlSticsvyY21T-dG3JW99e70Gxp_qxCeAx/exec';
+var API_URL = 'https://script.google.com/macros/s/AKfycbwvUJqFt6rGjxsmTOiDfZmTmYa-p6SRqjQ0TYjrGHGHB1ungDpF3oPNHweVFke0U1vT/exec';
 var PENALTY_PER_REPLAY = 10; // tru diem Nghe (thang 100) neu bam nghe lai (chi 1 lan cho CA bai Nghe)
 
 // ================== STATE ==================
@@ -236,6 +236,9 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>]/g, function(c){ retu
 
 function fetchJSON(url){
   return fetch(url).then(function(r){ return r.json(); });
+}
+function postJSON(url, body){
+  return fetch(url, { method:'POST', body: JSON.stringify(body) }).then(function(r){ return r.json(); });
 }
 
 function markAnswered(qid){
@@ -373,9 +376,26 @@ function startExam(){
   STUDENT.lesson = qs('inLesson').value;
   qs('setupErr').textContent = '';
   qs('btnStart').disabled = true;
-  qs('btnStart').textContent = 'Đang tải đề...';
+  qs('btnStart').textContent = 'Đang kiểm tra...';
 
-  fetchJSON(API_URL + '?action=exam&bai=' + encodeURIComponent(STUDENT.lesson)).then(function(res){
+  // Trước khi vào đề: kiểm tra học sinh này đã được giáo viên duyệt chưa.
+  // Lần đầu nhập tên -> hệ thống tự ghi tên vào danh sách chờ duyệt (tab
+  // "HocSinh" trong Google Sheet), học sinh phải chờ cô duyệt rồi quay lại
+  // bấm "Bắt đầu làm bài" lần nữa; những lần sau (đã được duyệt) vào thẳng.
+  postJSON(API_URL, { action:'checkApproved', hoTen: STUDENT.hoTen }).then(function(chk){
+    if(!chk.ok){ throw new Error(chk.error || 'Không kiểm tra được trạng thái duyệt'); }
+    if(!chk.approved){
+      qs('setupErr').textContent = chk.status === 'new'
+        ? 'Tên của bạn đã được gửi tới cô giáo. Vui lòng chờ cô duyệt rồi quay lại bấm "Bắt đầu làm bài".'
+        : 'Bạn chưa được cô giáo duyệt. Vui lòng chờ duyệt rồi quay lại bấm "Bắt đầu làm bài".';
+      qs('btnStart').disabled = false;
+      qs('btnStart').textContent = 'Bắt đầu làm bài';
+      return null;
+    }
+    qs('btnStart').textContent = 'Đang tải đề...';
+    return fetchJSON(API_URL + '?action=exam&bai=' + encodeURIComponent(STUDENT.lesson));
+  }).then(function(res){
+    if(res === null) return; // chua duoc duyet, da bao o buoc truoc, khong tai de
     if(!res.ok){ throw new Error(res.error || 'Không tải được đề'); }
     EXAM = res.data;
     document.body.classList.add('examMode');
