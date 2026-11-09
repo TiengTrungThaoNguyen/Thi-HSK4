@@ -130,6 +130,28 @@
   .expandHint{font-size:11px; color:#1e40af; font-style:italic;}
   .audioTrack{display:none;}
   .tbdNote{font-size:12px; color:#1e40af; font-style:italic; margin-top:6px;}
+  /* Khung o vuong phan Viet P2 - mo phong to giay thi that, moi chu hoc sinh
+     go se tu dien vao dung 1 o, co moc danh dau 100/200 o cuoi hang tuong
+     ung, giup hoc sinh uoc luong dang viet dai/ngan bao nhieu so voi yeu cau. */
+  .writeInput{margin-bottom:10px;}
+  .gridWrap{
+    border:1.5px solid var(--pink-light); border-radius:10px; overflow:hidden;
+    background:#fff; cursor:text; margin-bottom:4px;
+  }
+  .gridRow{display:flex; position:relative;}
+  .gridRow:not(:last-child){border-bottom:1px solid var(--pink-light);}
+  .gridCell{
+    flex:1 1 0; aspect-ratio:1/1; min-width:0; border-right:1px solid var(--pink-light);
+    display:flex; align-items:center; justify-content:center;
+    font-size:13px; color:#1e293b; font-weight:600; overflow:hidden;
+  }
+  .gridCell:last-child{border-right:none;}
+  .gridMilestone{
+    position:absolute; right:2px; bottom:1px; font-size:9px; color:var(--pink-accent); font-weight:700;
+  }
+  @media(max-width:520px){
+    .gridCell{font-size:10px;}
+  }
   .progressWrap{background:var(--pink-lighter); border-radius:999px; height:8px; overflow:hidden; margin:10px 0 4px;}
   .progressBar{height:100%; background:linear-gradient(90deg,var(--pink-primary),var(--pink-accent)); width:0%;}
   .scoreGrid{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin:16px 0;}
@@ -221,6 +243,32 @@ var STUDENT = { hoTen:'', maLop:'', lesson:null };
 var ANSWERS = {};      // qid (= STT thuc te, 1~70 lien tuc toan bai) -> 'A'/'B'/'C'...
 var VIET_P1_TEXT = {}; // qid -> cau hoc sinh dat (nhin tranh + tu goi y)
 var VIET_P2_TEXT = ''; // doan van hoc sinh viet - HSK4 Viet P2 chi co 1 doan/1 Bai
+var GRID_COLS = 20; // so o vuong moi hang trong khung viet - dung theo to giay thi that
+
+// Khung o vuong tham khao cho phan Viet P2 (doan van). Hoc sinh go vao 1
+// textarea binh thuong (de go tieng Trung bang IME tren dien thoai/may tinh
+// muot ma), khung o vuong ben duoi chi la PHAN HIEN THI THAM KHAO, tu dong
+// cap nhat tung chu vao dung o khi go - giup hoc sinh uoc luong dang viet
+// dai/ngan bao nhieu so voi yeu cau toi thieu.
+function writeGridHtml(fieldId, totalBoxes, minChars){
+  totalBoxes = totalBoxes || 200; minChars = minChars || 80;
+  var rows = Math.ceil(totalBoxes / GRID_COLS);
+  var cellsHtml = '';
+  for(var r=1; r<=rows; r++){
+    cellsHtml += '<div class="gridRow">';
+    for(var c=1; c<=GRID_COLS; c++){ cellsHtml += '<span class="gridCell"></span>'; }
+    var milestone = r*GRID_COLS;
+    if(milestone % 100 === 0){ cellsHtml += '<span class="gridMilestone">'+milestone+'</span>'; }
+    cellsHtml += '</div>';
+  }
+  var html = '<div class="gridWrap" id="grid_'+fieldId+'" onclick="qs(\'ta_'+fieldId+'\').focus()">' + cellsHtml + '</div>';
+  return html;
+}
+function updateWriteGrid(fieldId, val, totalBoxes){
+  var chars = Array.from(String(val||'').replace(/\n/g,''));
+  var cells = document.querySelectorAll('#grid_'+fieldId+' .gridCell');
+  cells.forEach(function(cell, i){ cell.textContent = i < chars.length ? chars[i] : ''; });
+}
 var REPLAYED_SET = {};    // audioId -> true (audio Nghe DUY NHAT cua ca bai, chi duoc nghe lai 1 lan)
 var REPLAYED_LABELS = []; // ten cac phan da bi bam nghe lai (de ghi vao KetQua)
 var AUDIO_LABEL_MAP = {}; // audioId -> nhan (label) cua audio do
@@ -576,15 +624,19 @@ function renderVietP2(part){
   var h = partHeadHtml_('viet_p2', [], '第二部分');
   h += '<div class="vietP2Item">';
   h += '<div class="qNum">Đề bài: '+esc(part.deBai || '(chưa có đề bài trong Sheet)')+'</div>';
-  h += '<textarea id="vietP2Box" rows="8" placeholder="Viết đoạn văn của bạn ở đây (tối thiểu 80 chữ)..." oninput="onVietP2Input(this.value)"></textarea>';
-  h += '<div class="tbdNote" id="vietP2Count">0 chữ (tối thiểu 80 chữ)</div>';
+  h += '<textarea class="writeInput" id="ta_vietP2" rows="6" placeholder="Viết đoạn văn của bạn ở đây (tối thiểu 80 chữ)..." oninput="onVietP2Input(this.value)"></textarea>';
+  h += writeGridHtml('vietP2', 200, 80);
+  h += '<div class="tbdNote" id="vietP2Count">0 chữ (tối thiểu 80 chữ, khung giấy có 200 ô)</div>';
   h += '</div>';
   return h;
 }
 function onVietP2Input(val){
   VIET_P2_TEXT = val;
+  updateWriteGrid('vietP2', val, 200);
   var n = val.replace(/\s/g,'').length;
-  qs('vietP2Count').textContent = n + ' chữ (tối thiểu 80 chữ)' + (n>=80?' ✅':'');
+  var chars = Array.from(val.replace(/\n/g,''));
+  var over = chars.length > 200;
+  qs('vietP2Count').textContent = n + ' chữ (tối thiểu 80 chữ)' + (n>=80?' ✅':'') + (over?' — đã vượt khung giấy, vẫn được tính':'');
   markAnswered('vietP2');
 }
 
